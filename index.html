@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Video Grid Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            overflow: hidden;
+        }
+
+        .container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .controls {
+            background: #2d2d2d;
+            padding: 15px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: #404040;
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .url-input::placeholder {
+            color: #888;
+        }
+
+        .url-input.dragover {
+            background: #1e3a5f;
+            border: 2px dashed #007acc;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background: #007acc;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #005c99;
+        }
+
+        .btn.danger {
+            background: #dc3545;
+        }
+
+        .btn.danger:hover {
+            background: #c82333;
+        }
+
+        .drop-zone {
+            border: 2px dashed #555;
+            padding: 40px;
+            text-align: center;
+            margin: 20px;
+            border-radius: 10px;
+            transition: all 0.3s;
+            background: #2d2d2d;
+        }
+
+        .drop-zone.dragover {
+            border-color: #007acc;
+            background: #1e3a5f;
+        }
+
+        .video-grid {
+            flex: 1;
+            display: grid;
+            gap: 10px;
+            padding: 10px;
+            overflow: auto;
+        }
+
+        .video-item {
+            position: relative;
+            background: #2d2d2d;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .video-item video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Hide video controls by default, show on hover */
+        .video-item video::-webkit-media-controls {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .video-item:hover video::-webkit-media-controls {
+            opacity: 1;
+        }
+
+        .video-item video::-webkit-media-controls-enclosure {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .video-item:hover video::-webkit-media-controls-enclosure {
+            opacity: 1;
+        }
+
+        /* Firefox */
+        .video-item video::-moz-media-controls {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .video-item:hover video::-moz-media-controls {
+            opacity: 1;
+        }
+
+        .video-remove {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(220, 53, 69, 0.8);
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .video-item:hover .video-remove {
+            opacity: 1;
+        }
+
+        .grid-1 { grid-template-columns: 1fr; }
+        .grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-4 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+        .grid-6 { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
+        .grid-9 { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+
+        .embed-error {
+            background: #2d2d2d;
+            border: 2px dashed #ff6b6b;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            min-height: 200px;
+        }
+
+        .embed-error a {
+            color: #007acc;
+            text-decoration: none;
+            padding: 8px 16px;
+            background: #404040;
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+
+        .embed-error a:hover {
+            background: #505050;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .global-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .instructions {
+            color: #888;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="controls">
+            <input type="text" class="url-input" placeholder="Paste or drag video URLs here (YouTube, Vimeo, direct video links)" id="urlInput">
+            <button class="btn" onclick="addVideoFromUrl()">Add Video</button>
+            <input type="file" class="file-input" id="fileInput" accept="video/*" multiple>
+            <button class="btn" onclick="document.getElementById('fileInput').click()">Upload Files</button>
+            <div class="global-controls">
+                <button class="btn" onclick="saveConfig()">Save Config</button>
+                <button class="btn" onclick="loadConfig()">Load Config</button>
+                <button class="btn danger" onclick="clearAll()">Clear All</button>
+            </div>
+            <input type="file" id="configInput" accept=".json" style="display:none;">
+        </div>
+
+        <div class="drop-zone" id="dropZone">
+            <h3>Drag & Drop Video Files, URLs, or Links Here</h3>
+            <p class="instructions">
+                Supports: MP4, WebM, AVI, MOV files or direct video URLs<br>
+                Platforms: YouTube, Vimeo, and other video sites<br>
+                Drag from browser address bar, selected text, or anywhere on this page<br>
+                Features: Hover controls • CC enabled • Save/Load configs
+            </p>
+        </div>
+
+        <div class="video-grid" id="videoGrid"></div>
+    </div>
+
+    <script>
+        let videos = [];
+        let videoCounter = 0;
+
+        // Drag and drop functionality
+        const dropZone = document.getElementById('dropZone');
+        const videoGrid = document.getElementById('videoGrid');
+        const urlInput = document.getElementById('urlInput');
+        const fileInput = document.getElementById('fileInput');
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function highlight() {
+            dropZone.classList.add('dragover');
+        }
+
+        function unhighlight() {
+            dropZone.classList.remove('dragover');
+        }
+
+        function highlightInput() {
+            urlInput.classList.add('dragover');
+        }
+
+        function unhighlightInput() {
+            urlInput.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            const text = dt.getData('text/plain') || dt.getData('text/uri-list') || dt.getData('text');
+
+            if (files.length > 0) {
+                handleFiles(files);
+            } else if (text) {
+                // Handle multiple URLs (one per line)
+                const urls = text.split('\n').filter(line => line.trim() && isValidUrl(line.trim()));
+                if (urls.length > 0) {
+                    urls.forEach(url => addVideo(url.trim()));
+                } else if (isValidUrl(text.trim())) {
+                    addVideo(text.trim());
+                }
+            }
+        }
+
+        function handleInputDrop(e) {
+            const dt = e.dataTransfer;
+            const text = dt.getData('text/plain') || dt.getData('text/uri-list') || dt.getData('text');
+
+            if (text) {
+                // For single URL drops on input, just add the first valid URL
+                const urls = text.split('\n').filter(line => line.trim() && isValidUrl(line.trim()));
+                if (urls.length > 0) {
+                    addVideo(urls[0].trim());
+                } else if (isValidUrl(text.trim())) {
+                    addVideo(text.trim());
+                }
+                // Clear the input field after drop
+                urlInput.value = '';
+            }
+        }
+
+        // Prevent default drag behaviors on entire document and URL input
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            urlInput.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+            document.addEventListener(eventName, preventDefaults, false);
+        });
+
+        // Highlight drop zone when item is dragged over it
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+            urlInput.addEventListener(eventName, highlightInput, false);
+            document.addEventListener(eventName, function(e) {
+                if (e.dataTransfer.types.includes('text/plain') || 
+                    e.dataTransfer.types.includes('text/uri-list') ||
+                    e.dataTransfer.files.length > 0) {
+                    highlight();
+                }
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+            urlInput.addEventListener(eventName, unhighlightInput, false);
+            document.addEventListener(eventName, unhighlight, false);
+        });
+
+        // Handle dropped files/URLs on entire document and URL input
+        dropZone.addEventListener('drop', handleDrop, false);
+        urlInput.addEventListener('drop', handleInputDrop, false);
+        document.addEventListener('drop', handleDrop, false);
+
+        function handleFiles(files) {
+            [...files].forEach(file => {
+                if (file.type.startsWith('video/')) {
+                    const url = URL.createObjectURL(file);
+                    addVideo(url, file.name);
+                }
+            });
+        }
+
+        function isValidUrl(string) {
+            try {
+                new URL(string);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+
+        function convertYouTubeUrl(url) {
+            // Handle various YouTube URL formats
+            let videoId = null;
+            
+            // Standard watch URLs
+            const watchRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+            let match = url.match(watchRegex);
+            
+            if (match) {
+                videoId = match[1];
+            } else {
+                // YouTube Shorts
+                const shortsRegex = /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/;
+                match = url.match(shortsRegex);
+                
+                if (match) {
+                    videoId = match[1];
+                } else {
+                    // Embed URLs
+                    const embedRegex = /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/;
+                    match = url.match(embedRegex);
+                    
+                    if (match) {
+                        videoId = match[1];
+                    } else {
+                        // Channel or other YouTube URLs - try to extract from various parameters
+                        const paramRegex = /[?&]v=([a-zA-Z0-9_-]{11})/;
+                        match = url.match(paramRegex);
+                        if (match) {
+                            videoId = match[1];
+                        }
+                    }
+                }
+            }
+            
+            if (videoId && videoId.length === 11) {
+                return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&cc_load_policy=1`;
+            }
+            
+            return url;
+        }
+
+        function convertPornhubUrl(url) {
+            // Extract video ID from Pornhub URLs
+            const regExp = /pornhub\.com\/view_video\.php\?viewkey=([a-zA-Z0-9]+)/;
+            const match = url.match(regExp);
+            
+            if (match && match[1]) {
+                return `https://www.pornhub.com/embed/${match[1]}`;
+            }
+            return url;
+        }
+
+        function convertVimeoUrl(url) {
+            // Extract video ID from Vimeo URLs
+            const regExp = /vimeo\.com\/(\d+)/;
+            const match = url.match(regExp);
+            
+            if (match && match[1]) {
+                return `https://player.vimeo.com/video/${match[1]}`;
+            }
+            return url;
+        }
+
+        function addVideo(src, name = null) {
+            videoCounter++;
+            const videoId = `video-${videoCounter}`;
+            
+            let videoElement;
+            let embedUrl;
+            
+            if (src.includes('youtube.com') || src.includes('youtu.be')) {
+                embedUrl = convertYouTubeUrl(src);
+                videoElement = `
+                    <iframe src="${embedUrl}" 
+                            frameborder="0" 
+                            allowfullscreen 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            style="width:100%;height:100%;"
+                            onerror="handleEmbedError('${videoId}')">
+                    </iframe>
+                    <div class="embed-error" id="error-${videoId}" style="display:none; padding:20px; text-align:center; color:#ff6b6b;">
+                        <p>⚠️ This YouTube video cannot be embedded</p>
+                        <p style="font-size:12px; margin-top:10px;">
+                            <a href="${src}" target="_blank" style="color:#007acc;">Open in new tab</a>
+                        </p>
+                    </div>`;
+            } else if (src.includes('pornhub.com')) {
+                embedUrl = convertPornhubUrl(src);
+                videoElement = `
+                    <iframe src="${embedUrl}" 
+                            frameborder="0" 
+                            allowfullscreen 
+                            style="width:100%;height:100%;"
+                            onerror="handleEmbedError('${videoId}')">
+                    </iframe>
+                    <div class="embed-error" id="error-${videoId}" style="display:none; padding:20px; text-align:center; color:#ff6b6b;">
+                        <p>⚠️ This video cannot be embedded</p>
+                        <p style="font-size:12px; margin-top:10px;">
+                            <a href="${src}" target="_blank" style="color:#007acc;">Open in new tab</a>
+                        </p>
+                    </div>`;
+            } else if (src.includes('vimeo.com')) {
+                embedUrl = convertVimeoUrl(src);
+                videoElement = `
+                    <iframe src="${embedUrl}" 
+                            frameborder="0" 
+                            allowfullscreen 
+                            allow="autoplay; fullscreen; picture-in-picture" 
+                            style="width:100%;height:100%;">
+                    </iframe>`;
+            } else if (src.includes('adult') || src.includes('xxx') || src.toLowerCase().includes('porn')) {
+                // Generic adult site handling
+                videoElement = `
+                    <iframe src="${src}" 
+                            frameborder="0" 
+                            allowfullscreen 
+                            style="width:100%;height:100%;"
+                            onerror="handleEmbedError('${videoId}')">
+                    </iframe>
+                    <div class="embed-error" id="error-${videoId}" style="display:none; padding:20px; text-align:center; color:#ff6b6b;">
+                        <p>⚠️ This video cannot be embedded</p>
+                        <p style="font-size:12px; margin-top:10px;">
+                            <a href="${src}" target="_blank" style="color:#007acc;">Open in new tab</a>
+                        </p>
+                    </div>`;
+            } else {
+                videoElement = `<video controls muted crossorigin="anonymous" style="outline: none;">
+                    <source src="${src}" type="video/mp4">
+                    <track kind="captions" srclang="en" label="English" default>
+                    Your browser does not support the video tag.
+                </video>`;
+            }
+
+            const videoItem = document.createElement('div');
+            videoItem.className = 'video-item';
+            videoItem.id = videoId;
+            videoItem.innerHTML = `
+                ${videoElement}
+                <button class="video-remove" onclick="removeVideo('${videoId}')" title="Remove video">×</button>
+            `;
+
+            videos.push({
+                id: videoId,
+                src: src,
+                name: name || `Video ${videoCounter}`
+            });
+
+            videoGrid.appendChild(videoItem);
+            updateGridLayout();
+            hideDropZone();
+
+            // Enable captions for HTML5 videos
+            const video = videoItem.querySelector('video');
+            if (video) {
+                video.addEventListener('loadedmetadata', function() {
+                    if (video.textTracks && video.textTracks.length > 0) {
+                        for (let i = 0; i < video.textTracks.length; i++) {
+                            video.textTracks[i].mode = 'showing';
+                        }
+                    }
+                });
+            }
+        }
+
+        function handleEmbedError(videoId) {
+            const iframe = document.querySelector(`#${videoId} iframe`);
+            const errorDiv = document.getElementById(`error-${videoId}`);
+            if (iframe && errorDiv) {
+                iframe.style.display = 'none';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        function removeVideo(videoId) {
+            const videoElement = document.getElementById(videoId);
+            if (videoElement) {
+                videoElement.remove();
+                videos = videos.filter(v => v.id !== videoId);
+                updateGridLayout();
+                
+                if (videos.length === 0) {
+                    showDropZone();
+                }
+            }
+        }
+
+        function updateGridLayout() {
+            const count = videos.length;
+            videoGrid.className = 'video-grid';
+            
+            if (count === 0) return;
+            if (count === 1) videoGrid.classList.add('grid-1');
+            else if (count === 2) videoGrid.classList.add('grid-2');
+            else if (count === 3) videoGrid.classList.add('grid-3');
+            else if (count <= 4) videoGrid.classList.add('grid-4');
+            else if (count <= 6) videoGrid.classList.add('grid-6');
+            else videoGrid.classList.add('grid-9');
+        }
+
+        function hideDropZone() {
+            dropZone.style.display = 'none';
+        }
+
+        function showDropZone() {
+            dropZone.style.display = 'block';
+        }
+
+        function addVideoFromUrl() {
+            const url = urlInput.value.trim();
+            if (url) {
+                addVideo(url);
+                urlInput.value = '';
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'warning' ? '#ff9800' : '#4caf50'};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 5px;
+                z-index: 1000;
+                font-size: 14px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                transition: opacity 0.3s;
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        function saveConfig() {
+            const now = new Date();
+            const timestamp = now.toISOString().replace(/[:.]/g, '-').split('T')[0] + '_' + 
+                             now.toTimeString().split(' ')[0].replace(/:/g, '-');
+            
+            const config = {
+                videos: videos,
+                timestamp: now.toISOString(),
+                version: '1.0'
+            };
+            
+            const dataStr = JSON.stringify(config, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = `multi-video-config-${timestamp}.json`;
+            link.click();
+            
+            showNotification(`Configuration saved! (${videos.length} videos)`);
+        }
+
+        function loadConfig() {
+            document.getElementById('configInput').click();
+        }
+
+        function handleConfigLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const config = JSON.parse(e.target.result);
+                    
+                    if (config.videos && Array.isArray(config.videos)) {
+                        // Clear existing videos
+                        clearAll();
+                        
+                        // Load videos from config
+                        config.videos.forEach(videoData => {
+                            addVideo(videoData.src, videoData.name);
+                        });
+                        
+                        showNotification(`Configuration loaded! (${config.videos.length} videos)`);
+                    } else {
+                        showNotification('Invalid configuration file', 'warning');
+                    }
+                } catch (error) {
+                    showNotification('Error loading configuration file', 'warning');
+                    console.error('Config load error:', error);
+                }
+            };
+            reader.readAsText(file);
+            
+            // Reset file input
+            event.target.value = '';
+        }
+
+        function clearAll() {
+            videos = [];
+            videoGrid.innerHTML = '';
+            updateGridLayout();
+            showDropZone();
+        }
+
+        // Handle file input
+        fileInput.addEventListener('change', function(e) {
+            handleFiles(e.target.files);
+        });
+
+        // Handle config file input
+        document.getElementById('configInput').addEventListener('change', handleConfigLoad);
+
+        // Handle Enter key in URL input
+        urlInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addVideoFromUrl();
+            }
+        });
+
+        // Handle paste in URL input
+        urlInput.addEventListener('paste', function(e) {
+            setTimeout(() => {
+                const url = e.target.value.trim();
+                if (url && isValidUrl(url)) {
+                    addVideo(url);
+                    e.target.value = '';
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>
