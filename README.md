@@ -4,7 +4,7 @@ A powerful, intuitive multi-video grid player that lets you watch multiple video
 
 [GridPlay Demo](https://gridplay.hisenz.com/)
 
-![snapshot.png]
+![snapshot](snapshot.png)
 
 ## ✨ Features
 
